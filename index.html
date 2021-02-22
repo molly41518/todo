@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ToDoList</title>
+    <link
+      rel="stylesheet"
+      href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
+    />
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.js"
+      integrity="sha512-WNLxfP/8cVYL9sj8Jnp6et0BkubLP31jhTG9vhL/F5uEZmg5wEzKoXp1kJslzPQWwPT1eyMiSxlKCgzHLOTOTQ=="
+      crossorigin="anonymous"
+    ></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
+  </head>
+  <body>
+    <div id="app">
+      <router-view></router-view>
+    </div>
+
+    <!-- vue 套件 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/2.6.9/vue.js"></script>
+    <script src="https://cdn.bootcss.com/vue-router/3.0.1/vue-router.min.js"></script>
+    <script src="https://cdn.bootcss.com/jquery/3.3.1/jquery.min.js"></script>
+    <script src="https://cdn.staticfile.org/axios/0.18.0/axios.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vuex/3.6.2/vuex.min.js"></script>
+
+    <script>
+      Vue.config.devtools = true;
+
+      let Index = {
+        template: `
+        <div>
+        <!-- trim 去頭尾空白 -->
+        <input type="text" v-model.trim="input" />
+        <a href="javascript:;" @click="creatName" class="btn btn-danger"
+          >新增事項</a
+        >
+        <div class="d-flex justify-content-center"">
+          <div v-for="(item,index) in lists">
+            <h1>
+              {{item.name}}<a
+                href="javascript:;"
+                @click="deleteName(item.id,index)"
+                >刪除</a
+              ><a href="javascript:;" @click="updateName(item.id,index)"
+                >修改</a
+              >
+            </h1>
+            <ol>
+              <li v-for="aa in item.works">
+                {{aa.workName}}<a href="javascript:;">刪除</a
+                ><a href="javascript:;">修改</a>
+              </li>
+            </ol>
+          </div>
+        </div>
+      </div>
+        `,
+        data() {
+          return {
+            input: "",
+            // lists: null,
+          };
+        },
+        computed: {
+          lists() {
+            console.log(this.$store.state.lists);
+            return this.$store.state.lists;
+          },
+        },
+        methods: {
+          creatName() {
+            if (!this.input) return false;
+            console.log("新增");
+            axios
+              .post("http://localhost:3000/users", { name: this.input })
+              .then((res) => {
+                this.input = "";
+                this.$store.commit("addName", res.data);
+              })
+              .catch();
+          },
+          deleteName(id, index) {
+            this.$store.dispatch("LIST_NAME_DELETE", { id, index });
+          },
+          updateName(id, index) {
+            // 按下更新切換頁面
+            // $router 的換頁有 push(可上一頁) replace(覆蓋不可上一頁)
+            // 寫法一
+            // this.$router.push({ path: "/update/" + id });
+            // 進階寫法
+            this.$router.push({ name: "update", params: { id: id } });
+          },
+        },
+        mounted() {
+          this.$store.dispatch("LISTS_NAME_READ");
+        },
+      };
+
+      let Update = {
+        template: `
+      <div>
+      <!-- trim 去頭尾空白 -->
+      <input type="text" v-model.trim="input" />
+      <a href="javascript:;" @click="editName">編輯人名</a>
+      </div>
+        `,
+        data() {
+          return {
+            input: "",
+          };
+        },
+        methods: {
+          editName() {
+            if (!this.input) return false;
+            console.log(this.input);
+            this.$store
+              .dispatch("LISTS_NAME_EDIT", {
+                id: this.$route.params.id,
+                input: this.input,
+              })
+              .then(() => {
+                this.$router.push({ name: "index" });
+              });
+          },
+        },
+        computed: {
+          showname() {
+            return this.$store.state.lists.find((item) => {
+              return item.id == this.$route.params.id;
+            });
+          },
+        },
+        mounted() {
+          if (!this.showname) return this.$router.replace({ name: "index" });
+          this.input = this.showname.name;
+        },
+      };
+
+      const store = new Vuex.Store({
+        // 嚴格模式
+        strict: true,
+        state: {
+          lists: [],
+        },
+        mutations: {
+          setNames(state, data) {
+            state.lists = data;
+          },
+          addName(state, data) {
+            state.lists.push(data);
+          },
+          deleteName(state, { data, index }) {
+            state.lists.splice(index, 1);
+          },
+          updatahName(state, { data, input }) {
+            console.log(data);
+            data.name = input;
+          },
+        },
+        actions: {
+          LISTS_NAME_READ: (context) => {
+            return axios
+              .get("http://localhost:3000/users?_embed=works")
+              .then((res) => {
+                console.log(res.data);
+                context.commit("setNames", res.data);
+              });
+          },
+          LIST_NAME_DELETE: (context, { id, index }) => {
+            return axios
+              .delete(`http://localhost:3000/users/${id}`)
+              .then((res) => {
+                console.log(res.data);
+                context.commit("deleteName", { data: res.data, index });
+              })
+              .catch();
+          },
+          LISTS_NAME_EDIT: (context, { id, input }) => {
+            let is_list = context.state.lists.find((item) => {
+              return item.id == id;
+            });
+            if (!is_list) return false;
+            return axios
+              .patch(`http://localhost:3000/users/${id}`, { name: input })
+              .then((res) => {
+                console.log(is_list);
+                context.commit("updatahName", { data: is_list, input });
+              });
+          },
+        },
+      });
+      const router = new VueRouter({
+        routes: [
+          {
+            path: "/",
+            name: "index",
+            component: Index,
+          },
+          {
+            path: "/update/:id",
+            name: "update",
+            component: Update,
+          },
+          {
+            path: "*",
+            redirect: "/",
+          },
+        ],
+      });
+
+      new Vue({
+        el: "#app",
+        router: router,
+        store,
+      });
+    </script>
+  </body>
+</html>
